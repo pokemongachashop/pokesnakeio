@@ -196,6 +196,22 @@ td.nm { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 #lastman b { font-size: 24px; color: var(--gold); font-weight: 900; }
 #lastman span { font-size: 15px; font-variant-numeric: tabular-nums; }
 .over-note { margin: -8px 0 14px; font-size: 14px; }
+
+/* 관전 대상 바꾸기 */
+#spec {
+  position: fixed; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%); z-index: 13;
+  padding: 8px 10px; width: 340px; max-width: calc(100vw - 32px); text-align: center;
+}
+.spec-sub { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.spec-sub .dead { color: var(--danger); font-weight: 700; }
+.spec-row { display: flex; align-items: center; gap: 8px; }
+.spec-row .btn { width: 44px; height: 40px; padding: 0; font-size: 15px; flex: none; }
+.spec-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.spec-name b { font-size: 16px; color: var(--gold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spec-name small { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.spec-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+#board-list li.watch { background: rgba(255, 209, 102, .14); box-shadow: inset 3px 0 0 var(--gold); }
+#board-list li[data-uid] { cursor: pointer; }
 .conn, #dead-banner, #hud .hud-box { pointer-events: none; }
 .admin-actions .btn { white-space: nowrap; }
 #toast {
@@ -223,6 +239,8 @@ td.nm { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
   .admin-stats { font-size: 12px; margin: 4px 0 6px; }
   .admin-actions .btn { padding: 6px 8px; font-size: 12px; }
   #toast { top: calc(200px + var(--safe-t)); }
+  #spec { bottom: calc(126px + var(--safe-b)); width: 300px; }
+  .pc-only { display: none; }
   #lastman { top: max(40%, 330px); }
   #lastman b { font-size: 20px; }
   #lastman span { font-size: 13px; }
