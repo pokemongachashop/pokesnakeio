@@ -184,7 +184,11 @@ function refreshUI() {
   const row = S.lb.find(r => r.uid === myUid());
   const lastMan = lastManActive() && (st === "running" || (st === "finished" && !S.result));
   show("lastman", lastMan && !screen);
-  const dead = st === "running" && joined && !S.me && S.meta && S.iDied === S.meta.gameId && !lastMan;
+  const spec = playing && !S.me && !S.spawning && (st === "running" || st === "countdown") && !screen &&
+    !(joined && !S.iDied && st === "countdown") && specTargets().length > 0;
+  show("spec", spec);
+  if (spec) renderSpec();
+  const dead = st === "running" && joined && !S.me && S.meta && S.iDied === S.meta.gameId && !lastMan && !spec;
   show("dead-banner", dead && !screen);
   if (dead) $("dead-banner").innerHTML = `<b>탈락했습니다</b> · ${row ? `${row.score}점, 현재 ${row.rank}위` : ""} · 관전 중`;
   const paused = S.me && S.me.paused;
@@ -350,6 +354,49 @@ function onDeathSeen(u, h, v) {
   if (v.k === myUid()) toast(`${victim} 처치!`);
   else if (killer) toast(`${killer} → ${victim} 처치`, 2000);
   else toast(`${victim} 연결 시간 초과로 탈락`, 2000);
+  if (S.watch === u) S.watchNext = v.k || null; // 보던 뱀이 탈락하면 처치한 뱀으로 이어서 관전
+}
+
+// ───────────────────────── 관전 대상 ─────────────────────────
+function specTargets() { // 살아 있는 다른 플레이어 (참가 순서로 고정: 순위가 바뀌어도 ◀ ▶ 순서가 흔들리지 않음)
+  const slot = u => (S.players[u] ? Number(S.players[u].slot) : 99);
+  return S.lb.filter(r => r.alive && r.uid !== myUid() && S.heads.get(r.uid) && S.heads.get(r.uid).pts.length)
+    .map(r => r.uid).sort((a, b) => slot(a) - slot(b) || (a < b ? -1 : 1));
+}
+function currentWatch() {
+  const list = specTargets();
+  if (!list.length) return null;
+  if (!list.includes(S.watch)) {
+    const leader = S.lb.find(r => list.includes(r.uid));
+    S.watch = list.includes(S.watchNext) ? S.watchNext : leader ? leader.uid : list[0];
+    S.watchNext = null;
+  }
+  return S.watch;
+}
+function watchStep(dir) {
+  const list = specTargets();
+  if (!list.length) return;
+  const i = list.indexOf(currentWatch());
+  S.watch = list[(i + dir + list.length) % list.length];
+  renderSpec();
+}
+function watchUid(uid) {
+  if (S.me || !specTargets().includes(uid)) return;
+  S.watch = uid;
+  renderSpec();
+}
+function renderSpec() {
+  const uid = currentWatch();
+  const list = specTargets();
+  const row = S.lb.find(r => r.uid === uid);
+  const html = row
+    ? `<b>${esc(row.nickname)}</b><small>${row.rank}위 · ${row.score}점 · 길이 ${row.length} · ${list.indexOf(uid) + 1}/${list.length}</small>`
+    : "<b>관전할 플레이어가 없습니다</b>";
+  if ($("spec-name").innerHTML !== html) $("spec-name").innerHTML = html;
+  const mine = S.lb.find(r => r.uid === myUid());
+  const sub = myPlayer() && mine && !mine.alive ? `<span class="dead">탈락했습니다 · ${mine.score}점, 현재 ${mine.rank}위</span>` : "관전 중";
+  if ($("spec-sub").innerHTML !== sub) $("spec-sub").innerHTML = sub;
+  $("spec-prev").disabled = $("spec-next").disabled = list.length < 2;
 }
 
 // ───────────────────────── 몸통 인코딩 ─────────────────────────
@@ -677,7 +724,8 @@ function renderBoard() {
   for (const r of S.lb) {
     let el = boardRows.get(r.uid);
     if (!el) el = document.createElement("li");
-    el.className = (r.alive ? "" : "dead ") + (r.uid === myUid() ? "me" : "");
+    el.className = (r.alive ? "" : "dead ") + (r.uid === myUid() ? "me " : "") + (!S.me && r.uid === S.watch && r.alive ? "watch" : "");
+    el.dataset.uid = r.uid;
     const note = r.paused ? " · 자리 비움" : r.online === false ? " · 끊김" : "";
     el.innerHTML = `<span class="rk">${r.rank}</span>
       <span class="nm"><i style="background:hsl(${hueOf(r.uid)} 80% 55%)"></i><b>${esc(r.nickname)}</b></span>
@@ -871,6 +919,12 @@ $("ap-restart").onclick = e => adminCmd("restart", e.currentTarget);
 $("ap-reset").onclick = e => adminCmd("reset", e.currentTarget);
 $("btn-over-close").onclick = () => { if (S.result) S.overSeen = S.result.gameId; refreshUI(); };
 $("board-toggle").onclick = () => $("board").classList.toggle("collapsed");
+$("spec-prev").onclick = () => watchStep(-1);
+$("spec-next").onclick = () => watchStep(1);
+$("board-list").addEventListener("click", e => { // 관전 중 순위표 이름을 누르면 그 플레이어 관전
+  const li = e.target.closest("li");
+  if (li && li.dataset.uid) watchUid(li.dataset.uid);
+});
 if (innerWidth < 760) $("board").classList.add("collapsed");
 $("duration").value = GC.initialGameDurationSeconds || 300;
 
@@ -914,6 +968,10 @@ function keyAngle() {
 }
 addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT") return;
+  if (!S.me && gameStatus() !== "waiting") { // 관전 중: ←/→ (A/D)로 대상 바꾸기
+    if (e.code === "ArrowLeft" || e.code === "KeyA") { watchStep(-1); e.preventDefault(); return; }
+    if (e.code === "ArrowRight" || e.code === "KeyD") { watchStep(1); e.preventDefault(); return; }
+  }
   if (KEYMAP[e.code]) { I.keys.add(e.code); keyAngle(); e.preventDefault(); }
   if (e.code === "Space") { I.keyBoost = true; e.preventDefault(); }
 });
@@ -1015,14 +1073,15 @@ function frame(now) {
   let target = null, len = INIT_LEN;
   if (me) { target = me.pts[0]; len = me.len; }
   else {
-    const leader = S.lb.find(r => r.alive && S.heads.get(r.uid) && S.heads.get(r.uid).pts.length);
-    if (leader) { const h = S.heads.get(leader.uid); const hd = otherHead(h, now); target = [hd.x, hd.y]; }
+    const w = currentWatch();
+    if (w) { const h = S.heads.get(w); const hd = otherHead(h, now); target = [hd.x, hd.y]; len = h.data.l; }
   }
   const base = Math.min(W, H) / (isTouch ? 760 : 980);
   const zt = target ? base * Math.pow(1 + Math.max(0, len - 5) / 120, -0.35) : Math.min(W, H) / (ARENA_R * 2.3);
   const cam = S.cam;
-  if (!target) target = [Math.cos(now / 9000) * 300, Math.sin(now / 9000) * 300];
-  const k = me ? 0.25 : 0.06;
+  const idle = !target;
+  if (idle) target = [Math.cos(now / 9000) * 300, Math.sin(now / 9000) * 300];
+  const k = me ? 0.25 : idle ? 0.06 : 0.18; // 관전 대상을 바꾸면 빠르게 따라감
   cam.x += (target[0] - cam.x) * k; cam.y += (target[1] - cam.y) * k; cam.z += (zt - cam.z) * 0.05;
   const z = cam.z;
 
@@ -1068,7 +1127,8 @@ function frame(now) {
     const hd = otherHead(h, now);
     const p = S.players[u];
     const label = h.data.p ? "자리 비움" : p && p.online === false ? "연결 끊김" : "";
-    drawSnake(h.pts, hd.x, hd.y, h.data.l, hueOf(u), -(h.odo - hd.back), !!h.data.b, h.data.n || "", false, label ? 0.75 : 1, label);
+    const watched = !me && u === S.watch;
+    drawSnake(h.pts, hd.x, hd.y, h.data.l, hueOf(u), -(h.odo - hd.back), !!h.data.b, (watched ? "관전 중 · " : "") + (h.data.n || ""), false, label ? 0.75 : 1, label);
   }
   // 내 뱀 (맨 위)
   S.myHead = null;
