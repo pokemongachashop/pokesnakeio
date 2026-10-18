@@ -186,6 +186,17 @@ td.nm { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
   pointer-events: none; font-variant-numeric: tabular-nums;
 }
 .admin-lobby #btn-clean { flex: 0 0 100%; }
+#lastman {
+  position: fixed; left: 50%; top: 28%; transform: translateX(-50%); z-index: 21; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  background: rgba(15, 22, 38, .92); border: 1px solid rgba(255, 209, 102, .5); border-radius: 16px;
+  padding: 16px 24px; box-shadow: 0 16px 40px rgba(0, 0, 0, .45); width: max-content; max-width: calc(100vw - 32px);
+  animation: toastIn .25s ease-out;
+}
+#lastman b { font-size: 24px; color: var(--gold); font-weight: 900; }
+#lastman span { font-size: 15px; font-variant-numeric: tabular-nums; }
+.over-note { margin: -8px 0 14px; font-size: 14px; }
+.conn, #dead-banner, #hud .hud-box { pointer-events: none; }
 .admin-actions .btn { white-space: nowrap; }
 #toast {
   position: fixed; left: 50%; top: calc(78px + var(--safe-t)); transform: translateX(-50%); z-index: 40;
@@ -207,7 +218,14 @@ td.nm { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
   #board-list li { grid-template-columns: 20px 1fr auto; padding: 3px 10px; font-size: 12px; }
   #board-list li .sc small { display: none; }
   #minimap { width: 104px; height: 104px; }
-  #admin-panel { top: auto; bottom: calc(48px + var(--safe-b)); width: 170px; }
+  /* 조이스틱을 가리지 않도록 화면 위쪽(시간 표시 아래)에 작게 배치 */
+  #admin-panel { top: calc(62px + var(--safe-t)); bottom: auto; width: 150px; padding: 8px 10px; }
+  .admin-stats { font-size: 12px; margin: 4px 0 6px; }
+  .admin-actions .btn { padding: 6px 8px; font-size: 12px; }
+  #toast { top: calc(200px + var(--safe-t)); }
+  #lastman { top: max(40%, 330px); }
+  #lastman b { font-size: 20px; }
+  #lastman span { font-size: 13px; }
   #boost { bottom: calc(130px + var(--safe-b)); width: 68px; height: 68px; }
   #dead-banner { bottom: calc(52px + var(--safe-b)); max-width: calc(100vw - 140px); font-size: 13px; }
   #hud-me .label { display: none; }
