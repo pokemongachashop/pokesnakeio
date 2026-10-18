@@ -84,21 +84,35 @@ function inGameHeads() {
   for (const [u, h] of S.heads) if (h.data && h.data.g === gid) out.push([u, h]);
   return out;
 }
-function allDead() {
+// 최후의 1인: 2명 이상 참가한 게임에서 생존자가 1명 이하가 되면(혼자 하는 게임은 0명이 되면) 3초 뒤 종료
+const LAST_MAN_DELAY = 3000;
+function lastManCheck() {
+  const m = S.meta;
+  if (!m || m.status !== "running" || !m.gameId || S.spawning) return;
+  if (S.lastMan && S.lastMan.gid === m.gameId) return;
+  const t = serverNow();
+  if (t < m.startedAt || t >= m.endsAt) return;
   const hs = inGameHeads();
-  return hs.length > 0 && !S.me && !S.spawning && hs.every(([, h]) => h.data.d);
+  const alive = hs.filter(([, h]) => !h.data.d);
+  if ((hs.length >= 2 && alive.length <= 1) || (hs.length >= 1 && alive.length === 0)) {
+    S.lastMan = {
+      gid: m.gameId, at: t + LAST_MAN_DELAY,
+      uid: alive[0] ? alive[0][0] : null, name: alive[0] ? alive[0][1].data.n : null,
+    };
+  }
 }
+function lastManActive() { return !!(S.lastMan && S.meta && S.lastMan.gid === S.meta.gameId); }
 function gameStatus() {
   const m = S.meta;
   if (!m || !m.status || m.status === "waiting" || !m.gameId) return "waiting";
   if (m.status === "finished") return "finished";
   const t = serverNow();
-  if (t >= m.endsAt || allDead()) return "finished";
+  if (t >= m.endsAt || (lastManActive() && t >= S.lastMan.at)) return "finished";
   if (t < m.startedAt) return "countdown";
   return "running";
 }
 
-// 공식 순위: 점수 → 길이 → 생존 여부 → 생존 시간 → 먼저 참가한 순
+// 순위 계산 (규칙은 아래 sort 참고)
 function leaderboard(useLocal) {
   if (!S.meta) return [];
   const t = Math.min(serverNow(), S.meta.endsAt || Infinity);
@@ -108,13 +122,16 @@ function leaderboard(useLocal) {
     if (useLocal && u === myUid() && S.me) { s = S.me.score; l = S.me.len; }
     const end = d.d ? (d.dt || (p && p.offlineAt) || t) : t;
     return {
-      uid: u, nickname: d.n || (p && p.name) || "?", score: s, length: Math.floor(l), alive: !d.d,
+      uid: u, nickname: d.n || (p && p.name) || "?", score: s, length: Math.floor(l), alive: !d.d, diedAt: d.d ? end : 0,
       survivalSec: Math.max(0, Math.round((Math.min(end, t) - (d.st || S.meta.startedAt)) / 1000)),
       joinedAt: (p && p.joinedAt) || 0, paused: !!d.p, online: !!p && p.online !== false,
     };
   });
-  rows.sort((a, b) => b.score - a.score || b.length - a.length || (b.alive - a.alive) ||
-    b.survivalSec - a.survivalSec || a.joinedAt - b.joinedAt || (a.uid < b.uid ? -1 : 1));
+  // 공식 순위: ① 생존자가 탈락자보다 위 (최후의 1인 = 1위)
+  //           ② 생존자끼리는 점수 → 길이,  탈락자끼리는 늦게 탈락한 순 → 점수 → 길이
+  rows.sort((a, b) => (b.alive - a.alive) ||
+    (a.alive ? 0 : b.diedAt - a.diedAt) ||
+    b.score - a.score || b.length - a.length || a.joinedAt - b.joinedAt || (a.uid < b.uid ? -1 : 1));
   rows.forEach((r, i) => { r.rank = i + 1; });
   return rows;
 }
@@ -165,7 +182,9 @@ function refreshUI() {
   show("countdown", st === "countdown" && !screen);
 
   const row = S.lb.find(r => r.uid === myUid());
-  const dead = st === "running" && joined && !S.me && S.meta && S.iDied === S.meta.gameId;
+  const lastMan = lastManActive() && (st === "running" || (st === "finished" && !S.result));
+  show("lastman", lastMan && !screen);
+  const dead = st === "running" && joined && !S.me && S.meta && S.iDied === S.meta.gameId && !lastMan;
   show("dead-banner", dead && !screen);
   if (dead) $("dead-banner").innerHTML = `<b>탈락했습니다</b> · ${row ? `${row.score}점, 현재 ${row.rank}위` : ""} · 관전 중`;
   const paused = S.me && S.me.paused;
@@ -603,16 +622,19 @@ function onStatus(st, prev) {
 async function finalize(gid) {
   if (S.histTried.has(gid)) return;
   S.histTried.add(gid);
-  await sleep(2500); // 마지막 점수 쓰기가 도착할 시간
+  const lm = lastManActive() ? { ...S.lastMan } : null;
+  await sleep(lm ? 1000 : 2500); // 마지막 점수 쓰기가 도착할 시간
   if (!S.meta || S.meta.gameId !== gid) return;
   let result = null;
   try { const s = await get(ref(db, "game/history/" + gid)); if (s.exists()) result = s.val(); } catch {}
   if (!result) {
-    const lb = leaderboard(false).map(({ joinedAt, paused, online, ...r }) => r);
+    const lb = leaderboard(false).map(({ joinedAt, paused, online, diedAt, ...r }) => r);
     result = {
       gameId: gid, startedAt: S.meta.startedAt, endedAt: Math.min(serverNow(), S.meta.endsAt),
       winnerUid: lb[0] ? lb[0].uid : null, winnerName: lb[0] ? lb[0].nickname : null, finalLeaderboard: lb,
+      reason: lm ? "last-survivor" : "time",
     };
+    if (lm && lm.uid) { result.lastSurvivorUid = lm.uid; result.lastSurvivorName = lm.name || "?"; }
     if (lb.length) {
       try {
         const r = await runTransaction(ref(db, "game/history/" + gid), cur => (cur ? undefined : result));
@@ -685,6 +707,9 @@ function renderResult() {
   if (!R0) return;
   const lb = Object.values(R0.finalLeaderboard || {});
   $("winner").textContent = R0.winnerName ? `우승: ${R0.winnerName} (${lb[0] ? lb[0].score : 0}점)` : "참가자가 없습니다";
+  $("over-note").textContent = R0.reason === "last-survivor"
+    ? (R0.lastSurvivorName ? `최후의 1인 ${R0.lastSurvivorName} — 나머지 참가자가 모두 탈락하여 경기가 종료되었습니다.` : "모든 참가자가 탈락하여 경기가 종료되었습니다.")
+    : "제한 시간이 끝나 경기가 종료되었습니다.";
   $("result-table").querySelector("tbody").innerHTML = lb.map(r => `
     <tr class="${r.uid === myUid() ? "me" : ""}">
       <td>${r.rank}</td><td class="nm">${esc(r.nickname)}</td><td>${r.score}</td><td>${r.length}</td>
@@ -718,6 +743,7 @@ setInterval(() => {
     renderBoard();
   }
   if (st === "running" && !S.me) maybeSpawn();
+  lastManCheck();
   refreshUI();
 }, 500);
 
@@ -857,7 +883,7 @@ canvas.addEventListener("pointerdown", e => {
   e.preventDefault();
   if (!I.joy) { I.joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY }; I.mode = "touch"; }
   else if (I.boostTouch == null) I.boostTouch = e.pointerId; // 두 번째 손가락: 부스트
-  canvas.setPointerCapture(e.pointerId);
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
 });
 canvas.addEventListener("pointermove", e => {
   if (e.pointerType === "mouse") {
@@ -898,7 +924,7 @@ addEventListener("keyup", e => {
 addEventListener("blur", () => { I.keys.clear(); I.keyBoost = I.mouseBoost = I.btnBoost = false; });
 
 const boostBtn = $("boost");
-boostBtn.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); I.btnBoost = true; boostBtn.classList.add("on"); boostBtn.setPointerCapture(e.pointerId); });
+boostBtn.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); I.btnBoost = true; boostBtn.classList.add("on"); try { boostBtn.setPointerCapture(e.pointerId); } catch {} });
 const boostOff = () => { I.btnBoost = false; boostBtn.classList.remove("on"); };
 boostBtn.addEventListener("pointerup", boostOff);
 boostBtn.addEventListener("pointercancel", boostOff);
@@ -979,6 +1005,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   lastFrame = now;
+  lastManCheck();
   const st = gameStatus();
   if (st !== S.lastStatus) { const prev = S.lastStatus; S.lastStatus = st; onStatus(st, prev); }
   if (S.me && st === "running" && !document.hidden && !S.me.paused) simulate(dt);
@@ -1093,6 +1120,13 @@ function drawHud(st) {
     }
   }
   if (S.me) { $("my-score").textContent = S.me.score; $("my-len").textContent = Math.floor(S.me.len); }
+  if (lastManActive()) {
+    const left = Math.ceil((S.lastMan.at - serverNow()) / 1000);
+    const title = S.lastMan.name ? `최후의 1인 · ${S.lastMan.name}` : "전원 탈락";
+    const msg = st === "finished" ? "경기 종료! 최종 순위를 집계하는 중…" : `모든 참가자가 탈락하여 ${Math.max(1, left)}초 뒤 경기가 종료됩니다`;
+    const html = `<b>${esc(title)}</b><span>${msg}</span>`;
+    if ($("lastman").innerHTML !== html) $("lastman").innerHTML = html;
+  }
 }
 
 function drawMinimap() {
