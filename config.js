@@ -4,18 +4,18 @@
 export const CONFIG = {
   // Firebase 콘솔 → 프로젝트 설정(톱니바퀴) → 일반 → 내 앱 → 웹 앱의 "SDK 설정 및 구성"에서 복사
   firebase: {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_FIREBASE_MESSAGING_SENDER_ID",
-    appId: "YOUR_FIREBASE_APP_ID"
+    apiKey: "AIzaSyB_t4Sl8X_yVSNCWSYb-AMQqE-JYvEWdvk",
+  authDomain: "pokesnakeio.firebaseapp.com",
+  databaseURL: "https://pokesnakeio-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "pokesnakeio",
+  storageBucket: "pokesnakeio.firebasestorage.app",
+  messagingSenderId: "105027070760",
+  appId: "1:105027070760:web:303149630f254b8a263e1d"
   },
 
   // Firebase Authentication에 이메일/비밀번호 사용자로 등록한 관리자 이메일.
   // 관리자 로그인 창에 미리 채워지는 값일 뿐이며, 실제 권한은 DB의 admins/{UID} 등록 여부로 결정됩니다.
-  adminEmail: "admin@snake-arena.game",
+  adminEmail: "pokepack1010@gmail.com",
 
   game: {
     maxPlayers: 20,                 // 최대 20 (DB 규칙의 자리 번호 0~19와 연결)
