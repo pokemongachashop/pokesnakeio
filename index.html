@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <title>스네이크 아레나</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- 상단 HUD -->
+  <header id="hud" class="hidden">
+    <div class="hud-box" id="hud-time"><span class="label">남은 시간</span><strong id="time">--:--</strong></div>
+    <div class="hud-box" id="hud-me"><span class="label">내 기록</span><strong><span id="my-score">0</span>점 · 길이 <span id="my-len">0</span> · <span id="my-rank">-</span>위</strong></div>
+    <button id="btn-join-late" class="btn small hidden">참가하기</button>
+  </header>
+
+  <div id="conn" class="conn"><i></i><span>연결 준비 중</span></div>
+
+  <!-- 순위표 -->
+  <aside id="board" class="panel hidden">
+    <button id="board-toggle" class="board-head" type="button">
+      <span>실시간 순위</span><span id="board-count" class="muted"></span><span class="chev">▾</span>
+    </button>
+    <ol id="board-list"></ol>
+  </aside>
+
+  <canvas id="minimap" class="hidden" width="150" height="150"></canvas>
+
+  <!-- 관리자 진행 패널 -->
+  <section id="admin-panel" class="panel hidden">
+    <div class="admin-title">관리자</div>
+    <div class="admin-stats"><span id="ap-status">-</span><span id="ap-count">-</span><span id="ap-time">-</span></div>
+    <div class="admin-actions">
+      <button id="ap-end" class="btn small danger">종료</button>
+      <button id="ap-restart" class="btn small">재시작</button>
+      <button id="ap-reset" class="btn small">새 게임 준비</button>
+    </div>
+  </section>
+
+  <button id="boost" class="hidden" type="button">부스트</button>
+  <div id="dead-banner" class="hidden"></div>
+  <div id="countdown" class="hidden"></div>
+  <div id="toast"></div>
+
+  <!-- 로딩 -->
+  <section id="screen-loading" class="screen">
+    <div class="card center">
+      <div class="logo">SNAKE<span>ARENA</span></div>
+      <div class="spinner"></div>
+      <p id="loading-text" class="muted">접속 준비 중…</p>
+    </div>
+  </section>
+
+  <!-- 오류 -->
+  <section id="screen-error" class="screen hidden">
+    <div class="card center">
+      <h2>연결할 수 없습니다</h2>
+      <p id="error-text" class="muted"></p>
+      <button id="btn-retry" class="btn primary">다시 시도</button>
+    </div>
+  </section>
+
+  <!-- 닉네임 입력 -->
+  <section id="screen-join" class="screen hidden">
+    <div class="card">
+      <div class="logo">SNAKE<span>ARENA</span></div>
+      <p id="join-sub" class="muted">먹이를 먹고 커지세요. 다른 뱀의 몸에 머리가 닿으면 탈락합니다.</p>
+      <form id="join-form" autocomplete="off">
+        <input id="nickname" maxlength="12" placeholder="닉네임 (1~12자)" required>
+        <button class="btn primary" type="submit">참가하기</button>
+      </form>
+      <p id="join-error" class="error"></p>
+      <div class="row-links">
+        <button id="btn-spectate" class="link" type="button">관전하기</button>
+        <button id="btn-admin-open" class="link" type="button">관리자 로그인</button>
+      </div>
+      <div id="history" class="history"></div>
+    </div>
+  </section>
+
+  <!-- 대기실 -->
+  <section id="screen-lobby" class="screen hidden">
+    <div class="card wide">
+      <div class="lobby-head">
+        <h2 id="lobby-title">대기실</h2>
+        <span id="lobby-count" class="pill"></span>
+      </div>
+      <p id="lobby-sub" class="muted">관리자가 게임을 시작할 때까지 기다려 주세요.</p>
+      <ul id="lobby-list" class="lobby-list"></ul>
+      <div id="admin-lobby" class="admin-lobby hidden">
+        <label>게임 시간(초) <input id="duration" type="number" min="30" max="3600" step="30"></label>
+        <button id="btn-start" class="btn primary">게임 시작</button>
+        <button id="btn-clean" class="btn small" type="button">끊긴 참가자 정리</button>
+      </div>
+      <div class="row-links">
+        <span id="whoami" class="muted"></span>
+        <button id="btn-admin-open2" class="link" type="button">관리자 로그인</button>
+        <button id="btn-logout" class="link hidden" type="button">관리자 로그아웃</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 결과 -->
+  <section id="screen-over" class="screen hidden">
+    <div class="card wide">
+      <h2>게임 종료</h2>
+      <p id="winner" class="winner"></p>
+      <div class="table-wrap">
+        <table id="result-table">
+          <thead><tr><th>순위</th><th>닉네임</th><th>점수</th><th>길이</th><th>생존</th><th>결과</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="over-actions">
+        <button id="btn-over-close" class="btn">맵 보기</button>
+        <button id="btn-reset" class="btn primary hidden">새 게임 준비</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 관리자 로그인 -->
+  <section id="screen-admin" class="screen hidden">
+    <div class="card">
+      <h2>관리자 로그인</h2>
+      <form id="admin-form">
+        <input id="admin-email" type="email" placeholder="관리자 이메일" required>
+        <input id="admin-pw" type="password" placeholder="비밀번호" required>
+        <button class="btn primary" type="submit">로그인</button>
+      </form>
+      <p id="admin-error" class="error"></p>
+      <p class="muted small">관리자로 로그인하면 계정(UID)이 바뀌므로, 참가 전에 로그인하세요.</p>
+      <button id="btn-admin-close" class="link" type="button">닫기</button>
+    </div>
+  </section>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "game": {
+      "current": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('admins').child(auth.uid).val() === true",
+
+        "meta": {
+          "status": {
+            ".write": "auth != null && newData.val() === 'finished' && data.val() === 'running' && now > data.parent().child('endsAt').val()"
+          }
+        },
+
+        "slots": {
+          "$i": {
+            ".write": "auth != null && ((!data.exists() && newData.val() === auth.uid) || (data.val() === auth.uid && !newData.exists()))",
+            ".validate": "$i.matches(/^(1?[0-9])$/) && newData.parent().parent().child('players').child(auth.uid).child('slot').val() === $i"
+          }
+        },
+
+        "players": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['name', 'slot', 'joinedAt']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 12 && newData.child('slot').isString() && newData.parent().parent().child('slots').child(newData.child('slot').val()).val() === $uid"
+          }
+        },
+
+        "heads": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && newData.exists() && root.child('game/current/players/' + $uid).exists() && root.child('game/current/meta/status').val() === 'running' && now < root.child('game/current/meta/endsAt').val() + 5000",
+            ".validate": "newData.hasChildren(['g', 'x', 'y', 'l', 's']) && newData.child('g').val() === root.child('game/current/meta/gameId').val() && newData.child('s').isNumber() && newData.child('l').isNumber() && newData.child('l').val() > 0 && newData.child('l').val() <= 3000 && (((!data.exists() || data.child('g').val() !== newData.child('g').val()) && newData.child('s').val() === 0 && newData.child('d').val() !== true) || (data.exists() && data.child('g').val() === newData.child('g').val() && newData.child('s').val() >= data.child('s').val() && newData.child('s').val() <= data.child('s').val() + 80 && (data.child('d').val() !== true || newData.child('d').val() === true)))",
+            "d": {
+              ".write": "auth != null && newData.val() === true && root.child('game/current/meta/status').val() === 'running' && root.child('game/current/players/' + $uid + '/online').val() === false && now > root.child('game/current/players/' + $uid + '/offlineAt').val() + 60000"
+            }
+          }
+        },
+
+        "bodies": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.hasChildren(['g', 'p']) && newData.child('p').isString() && newData.child('p').val().length <= 30000"
+          }
+        },
+
+        "drops": {
+          "$key": {
+            ".write": "auth != null && root.child('game/current/meta/status').val() === 'running' && ((!data.exists() && newData.exists()) || (data.exists() && !newData.exists()))",
+            ".validate": "newData.hasChildren(['x', 'y', 'v', 'h']) && newData.child('v').isNumber() && newData.child('v').val() >= 1 && newData.child('v').val() <= 5"
+          }
+        },
+
+        "eaten": {
+          "$i": {
+            ".write": "auth != null && root.child('game/current/meta/status').val() === 'running'",
+            ".validate": "$i.matches(/^[0-9]{1,3}$/) && newData.isNumber() && ((!data.exists() && newData.val() === 1) || (data.exists() && newData.val() === data.val() + 1))"
+          }
+        }
+      },
+
+      "history": {
+        ".read": "auth != null",
+        ".indexOn": ["endedAt"],
+        "$gameId": {
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.hasChildren(['gameId', 'endedAt', 'finalLeaderboard']) && newData.child('gameId').val() === $gameId"
+        }
+      }
+    }
+  }
+}
